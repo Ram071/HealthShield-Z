@@ -9,11 +9,33 @@ st.set_page_config(
     layout="wide"
 )
 
-df = generate_synthetic_healthcare_data(1000)
-model, metrics, feature_names = train_risk_model(df)
-
 st.sidebar.title("🛡️ HealthShield Z")
 st.sidebar.markdown("Experimental Clinical Analytics Prototype")
+
+# --- CUSTOM DATASET UPLOADER ---
+st.sidebar.subheader("📂 Data Source")
+uploaded_file = st.sidebar.file_uploader("Upload custom CSV dataset", type=["csv"])
+
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+        required_cols = {'age', 'bmi', 'blood_pressure', 'cholesterol', 'glucose', 'smoking_status', 'target_risk'}
+        if required_cols.issubset(df.columns):
+            st.sidebar.success(f"Loaded custom dataset ({len(df)} rows)!")
+        else:
+            st.sidebar.error(f"Missing required columns: {required_cols - set(df.columns)}")
+            st.sidebar.info("Falling back to synthetic dataset.")
+            df = generate_synthetic_healthcare_data(1000)
+    except Exception as e:
+        st.sidebar.error(f"Error loading file: {e}")
+        df = generate_synthetic_healthcare_data(1000)
+else:
+    df = generate_synthetic_healthcare_data(1000)
+    st.sidebar.info("Using default synthetic dataset (1,000 records).")
+
+# Train model on whichever dataset is active
+model, metrics, feature_names = train_risk_model(df)
+
 menu = st.sidebar.radio("Navigation", ["Live Risk Dashboard", "Model Evaluation", "Audit Trail & Privacy", "System Architecture & Demo Script"])
 
 if menu == "Live Risk Dashboard":
