@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from datetime import datetime, timezone
 from src.model import generate_synthetic_healthcare_data, train_risk_model, get_audit_logs, log_audit_event
 
 st.set_page_config(
@@ -14,6 +15,18 @@ st.sidebar.markdown("Experimental Clinical Analytics Prototype")
 
 # --- CUSTOM DATASET UPLOADER ---
 st.sidebar.subheader("📂 Data Source")
+
+# Downloadable Sample CSV template
+sample_template_df = generate_synthetic_healthcare_data(50)
+sample_csv_bytes = sample_template_df.to_csv(index=False).encode('utf-8')
+st.sidebar.download_button(
+    label="📥 Download Sample CSV Template",
+    data=sample_csv_bytes,
+    file_name="sample_patient_data.csv",
+    mime="text/csv",
+    help="Download a 50-row CSV file with the exact required schema to test the uploader."
+)
+
 uploaded_file = st.sidebar.file_uploader("Upload custom CSV dataset", type=["csv"])
 
 if uploaded_file is not None:
@@ -70,7 +83,29 @@ if menu == "Live Risk Dashboard":
             st.success(f"🟢 **Low Experimental Risk Score: {risk_percentage}%**")
             st.write("Notice: Profile falls within normal synthetic baseline parameters.")
 
-        log_audit_event("RISK_ASSESSMENT", "Evaluated anonymous patient profile.")
+        # Real-time clinical risk factor breakdown
+        alerts = []
+        if bp > 140:
+            alerts.append("⚠️ **Stage 2 Hypertension Alert** (Systolic BP > 140 mmHg)")
+        if glucose > 140:
+            alerts.append("⚠️ **Hyperglycemia Marker** (Blood Glucose > 140 mg/dL)")
+        if bmi > 30.0:
+            alerts.append("⚠️ **Elevated BMI (Obesity Range)** (BMI > 30.0 kg/m²)")
+        if cholesterol > 200:
+            alerts.append("⚠️ **Hypercholesterolemia Marker** (Cholesterol > 200 mg/dL)")
+        if age > 50:
+            alerts.append("⚠️ **Age Demographic Factor** (Age > 50)")
+        if smoking == 1:
+            alerts.append("⚠️ **Active Tobacco Smoking Factor**")
+
+        if alerts:
+            with st.expander("🔍 Identified Clinical Risk Drivers", expanded=True):
+                for a in alerts:
+                    st.markdown(f"- {a}")
+        else:
+            st.info("ℹ️ All patient vitals fall within standard synthetic baseline parameters.")
+
+        log_audit_event("RISK_ASSESSMENT", f"Evaluated patient profile (Calculated Risk: {risk_percentage}%).")
 
     st.markdown("---")
     st.subheader("📊 Feature Importance (Explainable AI)")
@@ -80,7 +115,7 @@ if menu == "Live Risk Dashboard":
 
 elif menu == "Model Evaluation":
     st.title("📈 Robust Model Evaluation Metrics")
-    st.markdown("Performance metrics evaluated on held-out synthetic test data (20% split).")
+    st.markdown(f"Performance metrics evaluated on held-out test data (20% split of {len(df)} records).")
     
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Accuracy", f"{metrics['accuracy']*100:.2f}%")
@@ -102,9 +137,20 @@ elif menu == "Audit Trail & Privacy":
     st.subheader("Persistent SQLite Audit Log (UTC Timestamps)")
     audit_df = get_audit_logs()
     st.dataframe(audit_df, use_container_width=True)
+
+    if not audit_df.empty:
+        audit_csv = audit_df.to_csv(index=False).encode('utf-8')
+        utc_stamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        st.download_button(
+            label="📥 Export Audit Trail (CSV)",
+            data=audit_csv,
+            file_name=f"healthshield_audit_logs_{utc_stamp}.csv",
+            mime="text/csv",
+            help="Export complete audit history for compliance and governance reviews."
+        )
     
     st.subheader("Privacy Design")
-    st.info("ℹ️ **Privacy Notice:** No patient identifiers or submitted feature values are stored in audit logs.")
+    st.info("ℹ️ **Privacy Notice:** No patient identifiers or raw submitted feature values are stored in audit logs.")
 
 elif menu == "System Architecture & Demo Script":
     st.title("🏗️ Architecture & Hackathon Demo Script")
