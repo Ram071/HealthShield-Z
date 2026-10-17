@@ -3,40 +3,59 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix
-import sqlite3
 from datetime import datetime, timezone
 
+try:
+    import sqlite3
+    HAS_SQLITE = True
+except (ImportError, ModuleNotFoundError):
+    HAS_SQLITE = False
+
 DB_NAME = "healthshield_audit.db"
+_MEMORY_AUDIT_LOGS = []
 
 def init_audit_db():
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS audit_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            action TEXT,
-            details TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    if HAS_SQLITE:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                action TEXT,
+                details TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
 
 def log_audit_event(action, details):
-    init_audit_db()
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
     utc_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
-    cursor.execute("INSERT INTO audit_logs (timestamp, action, details) VALUES (?, ?, ?)", (utc_time, action, details))
-    conn.commit()
-    conn.close()
+    if HAS_SQLITE:
+        init_audit_db()
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO audit_logs (timestamp, action, details) VALUES (?, ?, ?)", (utc_time, action, details))
+        conn.commit()
+        conn.close()
+    else:
+        _MEMORY_AUDIT_LOGS.insert(0, {
+            'timestamp': utc_time,
+            'action': action,
+            'details': details
+        })
 
 def get_audit_logs():
-    init_audit_db()
-    conn = sqlite3.connect(DB_NAME)
-    df = pd.read_sql("SELECT timestamp, action, details FROM audit_logs ORDER BY id DESC", conn)
-    conn.close()
-    return df
+    if HAS_SQLITE:
+        init_audit_db()
+        conn = sqlite3.connect(DB_NAME)
+        df = pd.read_sql("SELECT timestamp, action, details FROM audit_logs ORDER BY id DESC", conn)
+        conn.close()
+        return df
+    else:
+        if not _MEMORY_AUDIT_LOGS:
+            return pd.DataFrame(columns=['timestamp', 'action', 'details'])
+        return pd.DataFrame(_MEMORY_AUDIT_LOGS)
 
 def generate_synthetic_healthcare_data(n=1000):
     np.random.seed(42)

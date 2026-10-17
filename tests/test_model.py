@@ -42,3 +42,11 @@ def test_audit_persistence():
     logs = get_audit_logs()
     assert not logs.empty
     assert "TEST_ACTION" in logs['action'].values
+
+def test_audit_memory_fallback(monkeypatch):
+    import src.model as m
+    monkeypatch.setattr(m, 'HAS_SQLITE', False)
+    m.log_audit_event("FALLBACK_ACTION", "Testing in-memory audit log")
+    logs = m.get_audit_logs()
+    assert not logs.empty
+    assert "FALLBACK_ACTION" in logs['action'].values
